@@ -1,0 +1,26 @@
+imports:
+    - { resource: parameters.yml }
+
+best_it_ct_clean_up:
+    commercetools_client:
+        id: '%commercetools.client_id%'
+        project: '%commercetools.project%'
+        secret: '%commercetools.client_secret%'
+        scope: '%commercetools.scope%'
+    logger: 'monolog.logger.%cleanup.log_channel%'
+    predicates:
+        customer:
+            - 'externalId is defined'
+
+framework:
+    secret: '%secret%'
+
+monolog:
+    channels:
+        - '%cleanup.log_channel%'
+    handlers:
+        export_log:
+            type: stream
+            path: "%kernel.logs_dir%/%kernel.environment%.log"
+            level: debug
+            channels: ~

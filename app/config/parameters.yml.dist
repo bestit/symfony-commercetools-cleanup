@@ -1,0 +1,11 @@
+parameters:
+    cleanup.log_channel: DefineYourLogChannel
+
+    # The commercetools account
+    commercetools.client_id: YourCommerceToolsClientID
+    commercetools.client_secret: YourCommerceToolsClientSecret
+    commercetools.project: YourCommerceToolsProject
+    commercetools.scope: YourCommerceToolsScope
+
+    # A secret key that's used to generate certain security-related tokens
+    secret: ThisTokenIsNotSoSecretChangeIt
