@@ -71,24 +71,13 @@ class CleanupCommand extends Command
 
     /**
      * Executes the cleanup.
-     * @param InputInterface $input
-     * @param OutputInterface $output
-     * @return int
+     * @return void
      */
-    protected function execute(InputInterface $input, OutputInterface $output)
+    private function doCleanUp()
     {
-        if (!$this->lock()) {
-            $output->writeln('<error>The command is already running in another process.</error>');
-            $this->getLogger()->notice('The clean up command is already running.');
+        $logger = $this->getLogger();
 
-            return 0;
-        }
-
-        $this->getLogger()->info('Starting cleanup in command.');
-
-        $predicates = array_filter($this->getPredicatesForTypes(), function(array $queries): bool {
-            return !empty($queries);
-        });
+        $predicates = $this->getUsedPredicates();
 
         $map = [
             'category' => [CategoryQueryRequest::class, CategoryDeleteRequest::class],
@@ -98,7 +87,7 @@ class CleanupCommand extends Command
 
         $client = $this->getClient();
 
-        $this->getLogger()->debug('Predicates are filtered.', ['predicates' => $predicates]);
+        $logger->debug('Predicates are filtered.', ['predicates' => $predicates]);
 
         foreach ($predicates as $type => $queries) {
             list($queryClass, $deleteClass) = $map[$type];
@@ -107,16 +96,16 @@ class CleanupCommand extends Command
             $request = new $queryClass();
 
             if ($queries) {
-                $queryString = '(' . implode(') or (', $queries) . ')';
+                $queryString = $this->parseQueryString($queries);
 
-                $this->getLogger()->debug('Fetching rows.', ['query' => $queryString, 'type' => $type]);
+                $logger->debug('Fetching rows.', ['query' => $queryString, 'type' => $type]);
 
                 $request->where($queryString);
 
                 $response = $client->execute($request);
 
                 while (($response instanceof PagedQueryResponse) && ($response->getCount())) {
-                    $this->getLogger()->debug(
+                    $logger->debug(
                         'Found rows.',
                         ['count' => $response->getCount(), 'query' => $queryString, 'type' => $type]
                     );
@@ -125,7 +114,7 @@ class CleanupCommand extends Command
 
                     /** @var Resource $object */
                     foreach ($response->toObject() as $object) {
-                        $this->getLogger()->debug('Removed row.', ['object' => $object]);
+                        $logger->debug('Removed row.', ['object' => $object]);
 
                         $client->addBatchRequest($deleteClass::ofIdAndVersion(
                             $object->getId(),
@@ -135,20 +124,42 @@ class CleanupCommand extends Command
 
                     $responses = $client->executeBatch();
 
-                    array_walk($responses, function(ApiResponseInterface $response) {
+                    array_walk($responses, function (ApiResponseInterface $response) {
                         if ($response instanceof ErrorResponse) {
                             exit(var_dump($response->getMessage()));
                         }
                     });
 
-                    $this->getLogger()->debug('Refetching rows.', ['query' => $queryString, 'type' => $type]);
+                    $logger->debug('Refetching rows.', ['query' => $queryString, 'type' => $type]);
 
                     $response = $client->execute($request);
                 }
             }
         }
+    }
 
-        $this->getLogger()->info('Finished cleanup in command.');
+    /**
+     * Executes the cleanup.
+     * @param InputInterface $input
+     * @param OutputInterface $output
+     * @return int
+     */
+    protected function execute(InputInterface $input, OutputInterface $output)
+    {
+        $logger = $this->getLogger();
+
+        if (!$this->lock()) {
+            $output->writeln('<error>The command is already running in another process.</error>');
+            $logger->notice('The clean up command is already running.');
+
+            return 0;
+        }
+
+        $logger->info('Starting cleanup in command.');
+
+        $this->doCleanUp();
+
+        $logger->info('Finished cleanup in command.');
         $output->writeln('<info>Cleanup finished</info>');
     }
 
@@ -177,6 +188,29 @@ class CleanupCommand extends Command
     private function getPredicatesForTypes(): array
     {
         return $this->predicatesForTypes;
+    }
+
+    /**
+     * Returns the used predicates.
+     * @return array
+     */
+    private function getUsedPredicates(): array
+    {
+        return array_filter($this->getPredicatesForTypes(), function (array $queries): bool {
+            return !empty($queries);
+        });
+    }
+
+    /**
+     * Parses the query string.
+     * @param $queries
+     * @return string
+     */
+    private function parseQueryString($queries): string
+    {
+        $queryString = '(' . implode(') or (', $queries) . ')';
+
+        return $queryString;
     }
 
     /**

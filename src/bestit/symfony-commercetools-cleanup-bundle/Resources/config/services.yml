@@ -3,8 +3,8 @@ services:
         class: BestIt\CtCleanUpBundle\Command\CleanupCommand
         arguments:
             - '@best_it_ct_clean_up.commercetools.client'
-            - '@best_it_ct_clean_up.logger'
             - '%best_it_ct_clean_up.predicates%'
+            - '@?best_it_ct_clean_up.logger'
         tags:
             - { name: console.command }
 

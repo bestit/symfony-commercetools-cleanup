@@ -54,7 +54,6 @@ class Configuration implements ConfigurationInterface
                 ->end()
                 ->scalarNode('logger')
                     ->info('Please provide the service id for your logging service.')
-                    ->defaultValue('logger')
                 ->end()
                 ->arrayNode('predicates');
 

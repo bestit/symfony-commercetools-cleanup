@@ -25,8 +25,11 @@ class ClientFactory
      * @param LoggerInterface $logger
      * @return Client
      */
-    public static function createClient(array $config, CacheItemPoolInterface $cache, LoggerInterface $logger = null): Client
-    {
+    public static function createClient(
+        array $config,
+        CacheItemPoolInterface $cache,
+        LoggerInterface $logger = null
+    ): Client {
         $context = Context::of()->setLanguages(['de'])->setLocale('de_DE')->setGraceful(true);
         $config = Config::fromArray($config)->setContext($context);
 
