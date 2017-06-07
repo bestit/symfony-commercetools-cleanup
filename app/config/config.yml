@@ -11,7 +11,9 @@ best_it_ct_clean_up:
     predicates:
         customer:
             - 'externalId is defined'
-
+            - 'lastName="foobar" and email="test@example.com"
+        product:
+            - 'masterData(published=false) and lastModifiedAt <= "{{- 5 minutes}}"'
 framework:
     secret: '%secret%'
 

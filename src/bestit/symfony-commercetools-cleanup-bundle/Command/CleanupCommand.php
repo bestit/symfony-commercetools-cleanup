@@ -3,8 +3,6 @@
 namespace BestIt\CtCleanUpBundle\Command;
 
 use Commercetools\Core\Client;
-use Commercetools\Core\Model\Category\Category;
-use Commercetools\Core\Model\Common\Resource;
 use Commercetools\Core\Request\AbstractQueryRequest;
 use Commercetools\Core\Request\Categories\CategoryDeleteRequest;
 use Commercetools\Core\Request\Categories\CategoryQueryRequest;
@@ -20,25 +18,27 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Command\LockableTrait;
+use Symfony\Component\Console\Helper\ProgressBar;
+use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * The cleanup command.
  * @author blange <lange@bestit-online.de>
- * @package BestIt\CtCleanUpBundle
- * @subpackage Command
- * @version $id$
+ * @package BestIt\CtCleanUpBundle\Command
  */
 class CleanupCommand extends Command
 {
-    use LockableTrait, LoggerAwareTrait;
+    use LockableTrait;
+    use LoggerAwareTrait;
 
     /**
      * The commercetools client.
      * @var Client
      */
-    private $client = null;
+    private $client;
 
     /**
      * The predicates for the types.
@@ -56,26 +56,38 @@ class CleanupCommand extends Command
     {
         parent::__construct();
 
-        $this
-            ->setClient($client)
-            ->setPredicatesForTypes($predicates)
-            ->setLogger($logger ?? new NullLogger());
+        $this->client = $client;
+        $this->predicatesForTypes = $predicates;
+
+        $this->setLogger($logger ?? new NullLogger());
     }
 
+    /**
+     * Configures the command.
+     * @return void
+     */
     protected function configure()
     {
         $this
-            ->setName('bestit:cleanup:cleanup')
-            ->setDescription('Iterates through the config and cleans the matching commercetools objects.');
+            ->setName('bestit:cleanup')
+            ->setDescription('Iterates through the config and cleans the matching commercetools objects.')
+            ->addOption(
+                'simulate',
+                's',
+                InputOption::VALUE_NONE,
+                'Only simulate the query without any cleanup.'
+            );
     }
 
     /**
      * Executes the cleanup.
-     * @return void
+     * @param OutputInterface $output Table, progress and verbosity.
+     * @param bool $simulate Just simulate the query and give the total.
+     * @return Table
      */
-    private function doCleanUp()
+    private function doCleanUp(OutputInterface $output, bool $simulate = false): Table
     {
-        $logger = $this->getLogger();
+        $logger = $this->logger;
 
         $predicates = $this->getUsedPredicates();
 
@@ -85,57 +97,93 @@ class CleanupCommand extends Command
             'product' => [ProductQueryRequest::class, ProductDeleteRequest::class]
         ];
 
-        $client = $this->getClient();
+        $logger->debug(
+            'Predicates to filter.',
+            ['predicates' => $predicates, 'simulated' => $simulate]
+        );
 
-        $logger->debug('Predicates are filtered.', ['predicates' => $predicates]);
+        if ($simulate) {
+            $output->writeln('<comment>Just simulating.</comment>');
+        }
+
+        /** @var ProgressBar|null $progress */
+        $progress = null;
+        $table = new Table($output);
+        $table->setHeaders(array('Type', 'Predicate', 'First total'));
 
         foreach ($predicates as $type => $queries) {
+            $output->writeln('');
+            $output->writeln('<info>Run cleanup for type ' . $type . '.</info>');
             list($queryClass, $deleteClass) = $map[$type];
+
+            if ($progress) {
+                $progress->clear();
+                $progress = null;
+            }
 
             /** @var AbstractQueryRequest $queryObject */
             $request = new $queryClass();
 
-            if ($queries) {
-                $queryString = $this->parseQueryString($queries);
+            $queryString = $this->parseQueryString($queries);
 
-                $logger->debug('Fetching rows.', ['query' => $queryString, 'type' => $type]);
+            $logger->debug('Fetching rows.', ['query' => $queryString, 'type' => $type]);
 
-                $request->where($queryString);
+            $request->where($queryString);
 
-                $response = $client->execute($request);
+            $response = $this->client->execute($request);
 
-                while (($response instanceof PagedQueryResponse) && ($response->getCount())) {
-                    $logger->debug(
-                        'Found rows.',
-                        ['count' => $response->getCount(), 'query' => $queryString, 'type' => $type]
-                    );
+            $table->addRow(
+                [$type, $queryString, ($response instanceof PagedQueryResponse) ? $response->getTotal() : 0]
+            );
 
-                    set_time_limit(0);
+            while (!$simulate && ($response instanceof PagedQueryResponse) && ($response->getCount())) {
+                if (!$progress) {
+                    $progress = new ProgressBar($output);
 
-                    /** @var Resource $object */
-                    foreach ($response->toObject() as $object) {
-                        $logger->debug('Removed row.', ['object' => $object]);
-
-                        $client->addBatchRequest($deleteClass::ofIdAndVersion(
-                            $object->getId(),
-                            $object->getVersion()
-                        ));
-                    }
-
-                    $responses = $client->executeBatch();
-
-                    array_walk($responses, function (ApiResponseInterface $response) {
-                        if ($response instanceof ErrorResponse) {
-                            exit(var_dump($response->getMessage()));
-                        }
-                    });
-
-                    $logger->debug('Refetching rows.', ['query' => $queryString, 'type' => $type]);
-
-                    $response = $client->execute($request);
+                    $progress->start($response->getTotal());
                 }
+
+                $logger->debug(
+                    'Found rows.',
+                    ['count' => $response->getCount(), 'query' => $queryString, 'type' => $type]
+                );
+
+                set_time_limit(0);
+
+                /** @var Resource $object */
+                foreach ($response->toObject() as $object) {
+                    $logger->debug('Removed row.', ['object' => $object]);
+
+                    $this->client->addBatchRequest($deleteClass::ofIdAndVersion(
+                        $object->getId(),
+                        $object->getVersion()
+                    ));
+
+                    $progress->advance();
+                }
+
+                $responses = $this->client->executeBatch();
+
+                array_walk($responses, function (ApiResponseInterface $response) {
+                    if ($response instanceof ErrorResponse) {
+                        exit(var_dump($response->getMessage()));
+                    }
+                });
+
+                $logger->debug('Refetching rows.', ['query' => $queryString, 'type' => $type]);
+
+                $response = $this->client->execute($request);
             }
+
+            if ($progress) {
+                $progress->finish();
+            }
+
+            $output->writeln('');
+            $output->writeln('');
         }
+
+        return $table;
     }
 
     /**
@@ -146,7 +194,7 @@ class CleanupCommand extends Command
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        $logger = $this->getLogger();
+        $logger = $this->logger;
 
         if (!$this->lock()) {
             $output->writeln('<error>The command is already running in another process.</error>');
@@ -157,37 +205,12 @@ class CleanupCommand extends Command
 
         $logger->info('Starting cleanup in command.');
 
-        $this->doCleanUp();
+        $this->doCleanUp($output, $input->getOption('simulate'))->render();
+
+        $output->writeln('');
 
         $logger->info('Finished cleanup in command.');
-        $output->writeln('<info>Cleanup finished</info>');
-    }
-
-    /**
-     * Returns the client.
-     * @return Client
-     */
-    private function getClient(): Client
-    {
-        return $this->client;
-    }
-
-    /**
-     * Returns the logger.
-     * @return LoggerInterface
-     */
-    public function getLogger(): LoggerInterface
-    {
-        return $this->logger;
-    }
-
-    /**
-     * Returns the predicates for the types.
-     * @return array
-     */
-    private function getPredicatesForTypes(): array
-    {
-        return $this->predicatesForTypes;
+        $output->writeln('<info>Cleanup finished.</info>');
     }
 
     /**
@@ -196,44 +219,30 @@ class CleanupCommand extends Command
      */
     private function getUsedPredicates(): array
     {
-        return array_filter($this->getPredicatesForTypes(), function (array $queries): bool {
+        return array_filter($this->predicatesForTypes, function (array $queries): bool {
             return !empty($queries);
         });
     }
 
     /**
      * Parses the query string.
-     * @param $queries
+     * @param array $queries
      * @return string
      */
-    private function parseQueryString($queries): string
+    private function parseQueryString(array $queries): string
     {
+        array_walk($queries, function (&$query) {
+            $query = preg_replace_callback(
+                '/{{(.*)}}/Uu',
+                function (array $hit): string {
+                    return date('c', strtotime($hit[1]));
+                },
+                $query
+            );
+        });
+
         $queryString = '(' . implode(') or (', $queries) . ')';
 
         return $queryString;
-    }
-
-    /**
-     * Sets the predicates for the types.
-     * @param array $predicatesForTypes
-     * @return CleanupCommand
-     */
-    private function setPredicatesForTypes(array $predicatesForTypes): CleanupCommand
-    {
-        $this->predicatesForTypes = $predicatesForTypes;
-
-        return $this;
-    }
-
-    /**
-     * Sets the client.
-     * @param Client $client
-     * @return CleanupCommand
-     */
-    private function setClient(Client $client): CleanupCommand
-    {
-        $this->client = $client;
-
-        return $this;
     }
 }
