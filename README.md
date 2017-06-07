@@ -108,3 +108,4 @@ If you provide the option -s/--simulate no row will be deleted, the total count 
 * More Unittesting
 * Refactor the command
 * Add more Types
+* Add Exceptions in the delete process

@@ -164,6 +164,7 @@ class CleanupCommand extends Command
 
                 $responses = $this->client->executeBatch();
 
+                // TODO Add Exception.
                 array_walk($responses, function (ApiResponseInterface $response) {
                     if ($response instanceof ErrorResponse) {
                         exit(var_dump($response->getMessage()));
