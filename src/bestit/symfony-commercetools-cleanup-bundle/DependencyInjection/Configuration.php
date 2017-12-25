@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace BestIt\CtCleanUpBundle\DependencyInjection;
 
 use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
@@ -8,9 +10,9 @@ use Symfony\Component\Config\Definition\ConfigurationInterface;
 
 /**
  * Configuration for the bundle.
+ *
  * @author blange <lange@bestit-online.de>
- * @package BestIt\CtCleanUpBundle
- * @subpackage DependencyInjection
+ * @package BestIt\CtCleanUpBundle\DependencyInjection
  * @version $id$
  */
 class Configuration implements ConfigurationInterface
@@ -25,7 +27,10 @@ class Configuration implements ConfigurationInterface
         $node = (new TreeBuilder())->root($type);
 
         $node
-            ->info('Define your ' . $type . ' predicates (https://dev.commercetools.com/http-api.html).')
+            ->info(
+                'Define your ' . $type . ' predicates (https://dev.commercetools.com/http-api.html). This ' .
+                'predicates are concatinated with an or.'
+            )
             ->normalizeKeys(false)
             ->prototype('scalar')->end()
         ->end();
@@ -58,9 +63,11 @@ class Configuration implements ConfigurationInterface
                 ->arrayNode('predicates');
 
         $types = [
+            'cart',
             'category',
             'customer',
-            'product'
+            'product',
+            'order'
         ];
 
         foreach ($types as $type) {

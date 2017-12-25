@@ -1,13 +1,19 @@
 <?php
 
+declare(strict_types=1);
+
 namespace BestIt\CtCleanUpBundle\Command;
 
 use Commercetools\Core\Client;
 use Commercetools\Core\Request\AbstractQueryRequest;
+use Commercetools\Core\Request\Carts\CartDeleteRequest;
+use Commercetools\Core\Request\Carts\CartQueryRequest;
 use Commercetools\Core\Request\Categories\CategoryDeleteRequest;
 use Commercetools\Core\Request\Categories\CategoryQueryRequest;
 use Commercetools\Core\Request\Customers\CustomerDeleteRequest;
 use Commercetools\Core\Request\Customers\CustomerQueryRequest;
+use Commercetools\Core\Request\Orders\OrderDeleteRequest;
+use Commercetools\Core\Request\Orders\OrderQueryRequest;
 use Commercetools\Core\Request\Products\ProductDeleteRequest;
 use Commercetools\Core\Request\Products\ProductQueryRequest;
 use Commercetools\Core\Response\ApiResponseInterface;
@@ -26,6 +32,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * The cleanup command.
+ *
  * @author blange <lange@bestit-online.de>
  * @package BestIt\CtCleanUpBundle\Command
  */
@@ -92,9 +99,11 @@ class CleanupCommand extends Command
         $predicates = $this->getUsedPredicates();
 
         $map = [
+            'cart' => [CartQueryRequest::class, CartDeleteRequest::class],
             'category' => [CategoryQueryRequest::class, CategoryDeleteRequest::class],
             'customer' => [CustomerQueryRequest::class, CustomerDeleteRequest::class],
-            'product' => [ProductQueryRequest::class, ProductDeleteRequest::class]
+            'product' => [ProductQueryRequest::class, ProductDeleteRequest::class],
+            'order' => [OrderQueryRequest::class, OrderDeleteRequest::class]
         ];
 
         $logger->debug(
