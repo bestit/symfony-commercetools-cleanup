@@ -29,6 +29,14 @@ use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use function array_filter;
+use function array_map;
+use function array_walk;
+use function date;
+use function implode;
+use function preg_replace_callback;
+use function set_time_limit;
+use function strtotime;
 
 /**
  * The cleanup command.
@@ -118,7 +126,7 @@ class CleanupCommand extends Command
         /** @var ProgressBar|null $progress */
         $progress = null;
         $table = new Table($output);
-        $table->setHeaders(array('Type', 'Predicate', 'First total'));
+        $table->setHeaders(['Type', 'Predicate', 'First total']);
 
         foreach ($predicates as $type => $queries) {
             $output->writeln('');
@@ -130,7 +138,7 @@ class CleanupCommand extends Command
                 $progress = null;
             }
 
-            /** @var AbstractQueryRequest $queryObject */
+            /** @var AbstractQueryRequest $request */
             $request = new $queryClass();
 
             $queryString = $this->parseQueryString($queries);
@@ -151,6 +159,8 @@ class CleanupCommand extends Command
 
                     $progress->start($response->getTotal());
                 }
+
+                $failedIds = [];
 
                 $logger->debug(
                     'Found rows.',
@@ -173,14 +183,33 @@ class CleanupCommand extends Command
 
                 $responses = $this->client->executeBatch();
 
-                // TODO Add Exception.
-                array_walk($responses, function (ApiResponseInterface $response) {
+                array_walk($responses, function (ApiResponseInterface $response) use (&$failedIds) {
                     if ($response instanceof ErrorResponse) {
-                        exit(var_dump($response->getMessage()));
+                        $this->logger->error(
+                            'Object could not be deleted.',
+                            ['errors' => $response->getErrors()->toArray()]
+                        );
+
+                        $failedIds[] = $response->getRequest()->getId();
                     }
                 });
 
-                $logger->debug('Refetching rows.', ['query' => $queryString, 'type' => $type]);
+                if ($failedIds) {
+                    $request->where(
+                        'id not in (' . implode(',', array_map(function (string $failedId) {
+                            return '"' . $failedId . '"';
+                        }, $failedIds)) . ')'
+                    );
+                }
+
+                $logger->debug(
+                    'Refetching rows.',
+                    [
+                        'failedIds' => $failedIds,
+                        'query' => urldecode($request->httpRequest()->getUri()->getQuery()),
+                        'type' => $type
+                    ]
+                );
 
                 $response = $this->client->execute($request);
             }
