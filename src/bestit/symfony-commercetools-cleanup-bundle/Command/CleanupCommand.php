@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace BestIt\CtCleanUpBundle\Command;
 
+use BestIt\CtCleanUpBundle\DependencyInjection\Configuration;
 use Commercetools\Core\Client;
 use Commercetools\Core\Request\AbstractQueryRequest;
 use Commercetools\Core\Request\Carts\CartDeleteRequest;
@@ -12,6 +13,8 @@ use Commercetools\Core\Request\Categories\CategoryDeleteRequest;
 use Commercetools\Core\Request\Categories\CategoryQueryRequest;
 use Commercetools\Core\Request\Customers\CustomerDeleteRequest;
 use Commercetools\Core\Request\Customers\CustomerQueryRequest;
+use Commercetools\Core\Request\CustomObjects\CustomObjectDeleteRequest;
+use Commercetools\Core\Request\CustomObjects\CustomObjectQueryRequest;
 use Commercetools\Core\Request\Orders\OrderDeleteRequest;
 use Commercetools\Core\Request\Orders\OrderQueryRequest;
 use Commercetools\Core\Request\Products\ProductDeleteRequest;
@@ -107,11 +110,12 @@ class CleanupCommand extends Command
         $predicates = $this->getUsedPredicates();
 
         $map = [
-            'cart' => [CartQueryRequest::class, CartDeleteRequest::class],
-            'category' => [CategoryQueryRequest::class, CategoryDeleteRequest::class],
-            'customer' => [CustomerQueryRequest::class, CustomerDeleteRequest::class],
-            'product' => [ProductQueryRequest::class, ProductDeleteRequest::class],
-            'order' => [OrderQueryRequest::class, OrderDeleteRequest::class]
+            Configuration::TYPE_CART => [CartQueryRequest::class, CartDeleteRequest::class],
+            Configuration::TYPE_CATEGORY => [CategoryQueryRequest::class, CategoryDeleteRequest::class],
+            Configuration::TYPE_CUSTOMER => [CustomerQueryRequest::class, CustomerDeleteRequest::class],
+            Configuration::TYPE_PRODUCT => [ProductQueryRequest::class, ProductDeleteRequest::class],
+            Configuration::TYPE_ORDER => [OrderQueryRequest::class, OrderDeleteRequest::class],
+            Configuration::TYPE_CUSTOM_OBJECT => [CustomObjectQueryRequest::class, CustomObjectDeleteRequest::class],
         ];
 
         $logger->debug(

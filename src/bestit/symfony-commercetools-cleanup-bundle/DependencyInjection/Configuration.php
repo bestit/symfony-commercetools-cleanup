@@ -17,6 +17,50 @@ use Symfony\Component\Config\Definition\ConfigurationInterface;
  */
 class Configuration implements ConfigurationInterface
 {
+
+    /**
+     * Type to delete carts.
+     *
+     * @var string
+     */
+    const TYPE_CART = 'cart';
+
+    /**
+     * Type to delete categories.
+     *
+     * @var string
+     */
+    const TYPE_CATEGORY = 'category';
+
+    /**
+     * Type to delete customers.
+     *
+     * @var string
+     */
+    const TYPE_CUSTOMER = 'customer';
+
+    /**
+     * Type to delete products.
+     *
+     * @var string
+     */
+    const TYPE_PRODUCT = 'product';
+
+    /**
+     * Type to delete orders.
+     *
+     * @var string
+     */
+    const TYPE_ORDER = 'order';
+
+    /**
+     * Type to delete custom objects.
+     *
+     * @var string
+     */
+    const TYPE_CUSTOM_OBJECT = 'customObject';
+
+
     /**
      * Create a single type node.
      * @param string $type
@@ -63,11 +107,12 @@ class Configuration implements ConfigurationInterface
                 ->arrayNode('predicates');
 
         $types = [
-            'cart',
-            'category',
-            'customer',
-            'product',
-            'order'
+            self::TYPE_CART,
+            self::TYPE_CATEGORY,
+            self::TYPE_CUSTOMER,
+            self::TYPE_PRODUCT,
+            self::TYPE_ORDER,
+            self::TYPE_CUSTOM_OBJECT
         ];
 
         foreach ($types as $type) {
